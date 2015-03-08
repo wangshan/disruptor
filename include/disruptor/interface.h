@@ -1,18 +1,26 @@
-#ifndef DISRUPTOR2_INTERFACE_H_
-#define DISRUPTOR2_INTERFACE_H_
+#ifndef DISRUPTOR2_TYPES_H_
+#define DISRUPTOR2_TYPES_H_
 
 #include <climits>
 #include <vector>
 #include <map>
 
+#include <disruptor/sequence.h>
+#include <disruptor/batch_descriptor.h>
+
+// According to Stroustrup, in C++11 the macro __cplusplus will be set to a
+// value that differs from (is greater than) the current 199711L.
+#if __cplusplus <= 199711L
+#define STDEXT boost
 #include <boost/utility.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_array.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-
-#include <disruptor/sequence.h>
-#include <disruptor/batch_descriptor.h>
+#else
+#define STDEXT std
+#include <memory>
+#endif
 
 namespace disruptor {
 
@@ -20,7 +28,8 @@ enum TimeConfigKey {
     kSleep,
     kMaxIdle
 };
-typedef std::map<TimeConfigKey, boost::posix_time::time_duration> TimeConfig;
+
+typedef std::map<TimeConfigKey, STDEXT::posix_time::time_duration> TimeConfig;
 
 // Strategies employed for claiming the sequence of events in the
 // {@link Seqencer} by publishers.
@@ -70,7 +79,7 @@ public:
                                      const int64_t& batch_size) = 0;
 };
 
-typedef boost::shared_ptr<IClaimStrategy> ClaimStrategyPtr;
+typedef STDEXT::shared_ptr<IClaimStrategy> ClaimStrategyPtr;
 
 // Coordination barrier for tracking the cursor for publishers and sequence of
 // dependent {@link EventProcessor}s for processing a data structure.
@@ -97,7 +106,7 @@ public:
     // @throws AlertException if a status change has occurred for the
     // Disruptor.
     virtual int64_t waitFor(const int64_t& sequence,
-                            const boost::posix_time::time_duration& timeout) = 0;
+                            const STDEXT::posix_time::time_duration& timeout) = 0;
 
     // Delegate a call to the {@link Sequencer#getCursor()}
     //
@@ -122,7 +131,7 @@ public:
     virtual void checkAlert() const = 0;
 };
 
-typedef boost::shared_ptr<ISequenceBarrier> SequenceBarrierPtr;
+typedef STDEXT::shared_ptr<ISequenceBarrier> SequenceBarrierPtr;
 
 // Called by the {@link RingBuffer} to pre-populate all the events to fill the
 // RingBuffer.
@@ -134,7 +143,7 @@ class IEventFactory
 {
 public:
      virtual ~IEventFactory() {};
-     virtual boost::shared_ptr<T> newInstance() const = 0;
+     virtual STDEXT::shared_ptr<T> newInstance() const = 0;
 };
 
 // Callback interface to be implemented for processing events as they become
@@ -276,18 +285,19 @@ public:
                             const Sequence& cursor,
                             const DependentSequences& dependents,
                             const ISequenceBarrier& barrier,
-                            const boost::posix_time::time_duration& timeout) = 0;
+                            const STDEXT::posix_time::time_duration& timeout) = 0;
 
     // Signal those waiting that the cursor has advanced.
     virtual void signalAllWhenBlocking() = 0;
 };
 
-typedef boost::shared_ptr<IWaitStrategy> WaitStrategyPtr;
+typedef STDEXT::shared_ptr<IWaitStrategy> WaitStrategyPtr;
 
 
-inline boost::posix_time::time_duration GetTimeConfig(const TimeConfig& timeConfig,
-                                                      TimeConfigKey key,
-                                                      const boost::posix_time::time_duration& defVal)
+inline STDEXT::posix_time::time_duration getTimeConfig(
+        const TimeConfig& timeConfig,
+        TimeConfigKey key,
+        const STDEXT::posix_time::time_duration& defVal)
 {
     TimeConfig::const_iterator it = timeConfig.find(key);
     if (it != timeConfig.end()) {
@@ -299,6 +309,6 @@ inline boost::posix_time::time_duration GetTimeConfig(const TimeConfig& timeConf
 }
 
 
-};  // namespace disruptor
+}
 
 #endif
