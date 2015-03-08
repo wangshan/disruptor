@@ -1,46 +1,41 @@
-#ifndef DISRUPTOR_EVENT_PROCESSOR_H
-#define DISRUPTOR_EVENT_PROCESSOR_H
+// Copyright (c) 2011, François Saint-Jacques
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the disruptor-- nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL FRANÇOIS SAINT-JACQUES BE LIABLE FOR ANY
+// DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Changes Copyright (c) 2012 - 2013, IG Index Ltd.
+
+#ifndef DISRUPTOR2_EVENT_PROCESSOR_H_
+#define DISRUPTOR2_EVENT_PROCESSOR_H_
 
 #include <exception>
 
 #include <boost/atomic.hpp>
 #include <boost/utility.hpp>
 
-#include <disruptor/RingBuffer.h>
+#include <disruptor/ring_buffer.h>
 
 namespace disruptor {
-
-template <typename T>
-class NoOpEventProcessor : public IEventProcessor<T>
-{
-
-    class SequencerFollowingSequence : public Sequence
-    {
-        public:
-            SequencerFollowingSequence(Sequencer* following)
-                : following_(following) {}
-
-            int64_t get() const { return following_->getCursor(); }
-
-        private:
-            Sequencer* following_;
-    };
-
-public:
-    NoOpEventProcessor(RingBuffer<T>* ring_buffer)
-        : sequence_( new SequencerFollowingSequence(ring_buffer) )
-    {
-    }
-
-    virtual Sequence* getSequence() { return sequence_.get(); }
-
-    virtual void halt() {}
-
-    virtual void run() {}
-
-private:
-    boost::scoped_ptr<SequencerFollowingSequence> sequence_;
-};
 
 
 template <typename T>
@@ -90,9 +85,12 @@ public:
                 int64_t available_sequence =
                     sequence_barrier_->waitFor(next_sequence, wait_);
 
+                int64_t batch_size = available_sequence - next_sequence + 1;
+
                 while (next_sequence <= available_sequence) {
                     event = ring_buffer_->get(next_sequence);
                     event_handler_->onEvent(next_sequence,
+                            batch_size,
                             next_sequence == available_sequence, event);
                     next_sequence++;
                 }
@@ -101,6 +99,7 @@ public:
                     // not matter there was events or not, always notify handler
                     // with NULL event for special handling
                     event_handler_->onEvent(next_sequence,
+                            0,
                             next_sequence == available_sequence, NULL);
                 }
 
@@ -127,7 +126,6 @@ public:
 private:
     boost::atomic<bool> running_;
     Sequence sequence_;
-    ///PaddedLong sequence_;
 
     RingBuffer<T>* ring_buffer_;
     SequenceBarrierPtr sequence_barrier_; // barrier is (share)owned by processors
@@ -136,6 +134,6 @@ private:
     boost::posix_time::time_duration wait_; 
 };
 
-}
+};  // namespace disruptor
 
 #endif

@@ -1,7 +1,7 @@
-#ifndef DISRUPTOR_BATCH_DESCRIPTOR_H
-#define DISRUPTOR_BATCH_DESCRIPTOR_H
+#ifndef DISRUPTOR2_BATCH_DESCRIPTOR_H_
+#define DISRUPTOR2_BATCH_DESCRIPTOR_H_
 
-#include <disruptor/Sequence.h>
+#include <disruptor/sequence.h>
 
 namespace disruptor {
 
@@ -45,6 +45,6 @@ private:
 
 typedef boost::shared_ptr<BatchDescriptor> BatchDescriptorPtr;
 
-}
+};  // namespace disruptor
 
 #endif

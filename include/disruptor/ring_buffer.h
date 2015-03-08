@@ -1,9 +1,9 @@
-#ifndef DISRUPTOR_RING_BUFFER_H
-#define DISRUPTOR_RING_BUFFER_H
+#ifndef DISRUPTOR2_RING_BUFFER_H_
+#define DISRUPTOR2_RING_BUFFER_H_
 
 #include <vector>
 
-#include <disruptor/Sequencer.h>
+#include <disruptor/sequencer.h>
 
 namespace disruptor {
 
@@ -21,7 +21,7 @@ public:
     // @param event_factory to instance new entries for filling the RingBuffer.
     // @param buffer_size of the RingBuffer, must be a power of 2.
     // @param claim_strategy_option threading strategy for publishers claiming
-    // entries in thS ring.
+    // entries in the ring.
     // @param wait_strategy_option waiting strategy employed by
     // processors_to_track waiting in entries becoming available.
     //
@@ -81,6 +81,6 @@ private:
     boost::scoped_array<T> events_;
 };
 
-}
+};  // namespace disruptor
 
 #endif

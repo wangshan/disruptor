@@ -1,0 +1,171 @@
+#ifndef DISRUPTOR_TEST_TESTUTILS_H
+#define DISRUPTOR_TEST_TESTUTILS_H
+
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <disruptor/interface.h>
+#include <sstream>
+
+namespace disruptor {
+namespace test {
+
+// used for unit test
+class StubEvent {
+    public:
+        explicit StubEvent(int i) : value_(i) {}
+
+        StubEvent() : value_(0) {}
+
+        void set_value(int i) { value_ = i; }
+        const int value() const { return value_; }
+
+    private:
+        int value_;
+};
+
+class StubEventFactory : public IEventFactory<StubEvent> {
+     public:
+         virtual ~StubEventFactory() {};
+
+         boost::shared_ptr<StubEvent> newInstance() const {
+             return boost::make_shared<StubEvent>();
+         }
+};
+
+// used for performance test
+class TimestampEvent {
+    public:
+        explicit TimestampEvent(long i) : value_(i) {}
+
+        TimestampEvent() : value_(0) {}
+
+        void set_value(long i, const timespec& time) { value_ = i; time_ = time; }
+        const long value() const { return value_; }
+        const timespec& time() const { return time_; }
+
+    private:
+        long value_;
+        timespec time_;
+};
+
+class TimestampEventFactory : public IEventFactory<TimestampEvent> {
+     public:
+         virtual ~TimestampEventFactory() {};
+
+         boost::shared_ptr<TimestampEvent> newInstance() const {
+             return boost::make_shared<TimestampEvent>();
+         }
+};
+
+
+class TimestampBatchHandler : public IEventHandler<TimestampEvent>
+{
+    public:
+        TimestampBatchHandler(uint64_t benchmark = 0) :
+            total_latency_(0),
+            benchmark_(benchmark),
+            latency_below_benchmark_(0),
+            count_(0),
+            min_latency_(std::numeric_limits<uint64_t>::max()),
+            max_latency_(0)
+        {
+        }
+
+        virtual void onEvent(const int64_t& sequence,
+                             const bool& end_of_batch,
+                             TimestampEvent* event) 
+        {
+            if (event == NULL) {
+                return;
+            }
+            // process a new event as it becomes available.
+            count_++;
+            timespec ts_finish; 
+            clock_gettime(CLOCK_MONOTONIC, &ts_finish);
+
+            timespec ts_start = event->time();
+            uint64_t latency = (ts_finish.tv_sec - ts_start.tv_sec)*1000000000LL + ts_finish.tv_nsec - ts_start.tv_nsec;
+
+            if (latency > 0)
+            {
+                min_latency_ = (latency<min_latency_)?latency:min_latency_;
+                max_latency_ = (latency>max_latency_)?latency:max_latency_;
+            }
+            else if (latency < 0)
+            {
+                std::ostringstream oss;
+                oss <<"latency less than 0? " << "latency = " << latency;
+                throw std::runtime_error(oss.str());
+            }
+
+            if( latency <= benchmark_ ) 
+            {
+                ++latency_below_benchmark_;
+            }
+
+            total_latency_ += latency;
+
+            if( sequence != event->value() )
+            {
+                std::ostringstream oss;
+                oss << "sequence not the same as value!! sequence = " << sequence
+                    << " event->value = " << event->value();
+                throw std::runtime_error(oss.str());
+            } /*else {
+                std::ostringstream oss;
+                oss << "sequence = " << sequence
+                    << " event->value = " << event->value();
+                std::cout<<oss.str()<<std::endl;
+            }*/
+        }
+
+        virtual void onStart() {}
+
+        virtual void onShutdown() {}
+
+        uint64_t total_latency() { return total_latency_; }
+
+        uint64_t max_latency() { return max_latency_; }
+
+        uint64_t min_latency() { return min_latency_; }
+
+        uint64_t latency_below_benchmark() { return latency_below_benchmark_; }
+
+        uint64_t count() { return count_; }
+
+    private:
+        uint64_t total_latency_;
+        uint64_t benchmark_;
+        uint64_t latency_below_benchmark_;
+        uint64_t count_;
+        uint64_t min_latency_;
+        uint64_t max_latency_;
+};
+
+class TimestampEventTranslator : public IEventTranslator<TimestampEvent>
+{
+    public:
+        virtual TimestampEvent* translateTo(const int64_t& sequence, TimestampEvent* event) 
+        {
+            timespec stamp; 
+            clock_gettime(CLOCK_MONOTONIC, &stamp);
+            event->set_value(sequence, stamp);
+            return event;
+        }
+};
+
+// NOT THREAD SAFE
+class IgnoreExceptionHandler : public IExceptionHandler<TimestampEvent>
+{
+    public:
+        virtual void handle(const std::exception& exception,
+                            const int64_t& sequence,
+                            TimestampEvent* event) 
+        {
+            std::cerr<<"exception caught when processing event at sequence "<<sequence
+                <<", "<<exception.what()<<std::endl;
+        }
+};
+
+}}
+
+#endif

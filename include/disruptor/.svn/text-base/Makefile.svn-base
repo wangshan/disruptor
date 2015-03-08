@@ -1,0 +1,120 @@
+MAIN_DIR=../../..
+
+include $(MAIN_DIR)/makefile.inc
+
+include $(TEST_DIR)/makefile.inc
+
+###### target and source definition
+
+LIB_SOURCES:=$(wildcard $(DISRUPTOR_GTEST_TEST_DIR)/[A-Z]*.cpp)
+PROG_SOURCES:=$(wildcard $(DISRUPTOR_GTEST_TEST_DIR)/[a-z]*.cpp)
+ 
+BUILD_DIR:=$(BUILD_DIR)/gtest/disruptor
+
+LIB_OBJECTS:=$(addprefix $(BUILD_DIR)/,$(notdir $(LIB_SOURCES:.cpp=.o)))
+PROG_OBJECTS:=$(addprefix $(BUILD_DIR)/,$(notdir $(PROG_SOURCES:.cpp=.o)))
+
+LIB_DEPENDS:=$(addprefix $(BUILD_DIR)/,$(notdir $(LIB_SOURCES:.cpp=.d)))
+PROG_DEPENDS:=$(addprefix $(BUILD_DIR)/,$(notdir $(PROG_SOURCES:.cpp=.d)))
+
+testdisruptor=testdisruptor-$(OS_TAG)$(ARCH_TAG)
+
+INCLUDE+=-I$(DISRUPTOR_GTEST_TEST_DIR)
+
+
+.PHONY: all
+all: build
+
+.PHONY: build
+build: $(testdisruptor)
+
+.PHONY: check
+check: checkdisruptor
+
+runcheck=LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)     $(1) --gtest_output=xml:testresults.xml $(TESTS)
+runmemcheck=LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)  $(VALGRIND) $(1) $(TESTS)
+rungdbcheck=LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)  $(GDB) $(1) $(GDB_ARGS)
+#runprofcheck=LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(CALLGRIND) $(1) $(TESTS)
+runprofcheck=LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)  CPUPROFILE=./$(1)_$(TESTS)_profile $(1) $(TESTS)
+runthrdcheck=LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(HELGRIND) $(1) $(TESTS)
+
+
+.PHONY: viewprofile
+viewprofile:
+	callgrind_annotate --auto=yes --inclusive=yes --tree=both $(PROFILE)
+
+.PHONY: thrdcheckdisruptor
+thrdcheckdisruptor: $(testdisruptor)
+	$(call runthrdcheck,./$<)
+
+.PHONY: profcheckdisruptor
+profcheckdisruptor: $(testdisruptor)
+	$(call runprofcheck,./$<)
+
+.PHONY: gdbnoinit
+gdbnoinit: $(testdisruptor)
+	$(call rungdbcheck,./$<)
+
+.PHONY: gdbcheckdisruptor
+gdbcheckdisruptor: $(testdisruptor)
+	echo > .gdbinit
+	echo "set args $(TESTS)" >> .gdbinit
+	echo "b $(word 1, $(TESTS))" >> .gdbinit
+	echo "r"  >> .gdbinit
+	$(call rungdbcheck,./$<)
+	$(RM) .gdbinit
+
+.PHONY: memcheckdisruptor
+memcheckdisruptor: $(testdisruptor)
+	$(call runmemcheck,./$<)
+
+.PHONY: checkdisruptor
+checkdisruptor: $(testdisruptor)
+	$(call runcheck,./$<)
+
+.PHONY: test
+test: build
+
+.PHONY: memtest
+memtest: memcheckdisruptor
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+.PHONY: depend
+depend: $(LIB_DEPENDS) $(PROG_DEPENDS)
+
+$(BUILD_DIR)/%.d: %.cpp | $(BUILD_DIR)
+	$(CXX) -MM $(CPPFLAGS) -MT $(BUILD_DIR)/$*.o -o $@ $<
+
+$(BUILD_DIR)/%.o: %.cpp $(BUILD_DIR)/%.d | $(BUILD_DIR)
+	$(CXX) $(CPPFLAGS) -c -o $@ $<
+
+$(testdisruptor): $(BUILD_DIR)/testdisruptor.o $(LIB_OBJECTS)
+	$(LD) $(LIB_OBJECTS) $< $(LDFLAGS) -o $@
+	
+
+.PHONY: clean
+clean: 
+	$(RM) $(testdisruptor)
+	$(RM) $(LIB_OBJECTS) $(PROG_OBJECTS)
+	$(RM) testresults.xml
+
+.PHONY: cleanall distclean
+distclean: cleanall
+cleanall: clean cleanlogs
+	$(RM) $(LIB_DEPENDS) $(PROG_DEPENDS)
+
+.PHONY: cleanlogs
+cleanlogs: 
+
+.PHONY: vars
+vars:
+	@echo LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)
+	ldd $(testdisruptor)
+
+ifneq (,$(filter-out depend clean cleanall cleanlogs links vars,$(MAKECMDGOALS)))
+include $(LIB_DEPENDS)
+include $(PROG_DEPENDS)
+endif
+

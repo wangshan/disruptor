@@ -1,5 +1,5 @@
-#ifndef DISRUPTOR_WAIT_STRATEGY_H
-#define DISRUPTOR_WAIT_STRATEGY_H
+#ifndef DISRUPTOR2_WAIT_STRATEGY_H_
+#define DISRUPTOR2_WAIT_STRATEGY_H_
 
 #include <sys/time.h>
 
@@ -8,8 +8,8 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread/thread_time.hpp>
 
-#include <disruptor/Exceptions.h>
-#include <disruptor/Interface.h>
+#include <disruptor/exceptions.h>
+#include <disruptor/interface.h>
 
 namespace disruptor {
 
@@ -19,17 +19,17 @@ enum WaitStrategyOption {
     // This strategy uses a condition variable inside a lock to block the
     // event procesor which saves CPU resource at the expense of lock
     // contention.
-    eBlockingStrategy,
+    kBlockingStrategy,
     // This strategy uses a progressive back off strategy by first spinning,
     // then yielding, then sleeping for 1ms period. This is a good strategy
     // for burst traffic then quiet periods when latency is not critical.
-    eSleepingStrategy,
+    kSleepingStrategy,
     // This strategy calls Thread.yield() in a loop as a waiting strategy
     // which reduces contention at the expense of CPU resource.
-    eYieldingStrategy,
+    kYieldingStrategy,
     // This strategy call spins in a loop as a waiting strategy which is
     // lowest and most consistent latency but ties up a CPU.
-    eBusySpinStrategy
+    kBusySpinStrategy
 };
 
 // Blocking strategy that uses a lock and condition variable for
@@ -58,7 +58,7 @@ public:
         } // unlock happens here, on ulock destruction.
 
         if (0 != dependents.size()) {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
             }
         }
@@ -85,7 +85,7 @@ public:
         } // unlock happens here, on ulock destruction
 
         if (0 != dependents.size()) {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
             }
         }
@@ -127,7 +127,7 @@ public:
             }
         }
         else {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
             }
         }
@@ -159,7 +159,7 @@ public:
             }
         }
         else {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
                 gettimeofday(&end_time, NULL);
                 int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
@@ -220,7 +220,7 @@ public:
             }
         }
         else {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
             }
         }
@@ -252,7 +252,7 @@ public:
             }
         }
         else {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
                 gettimeofday(&end_time, NULL);
                 int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
@@ -304,7 +304,7 @@ public:
                 barrier.checkAlert();
             }
         } else {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
             }
         }
@@ -335,7 +335,7 @@ public:
             }
         }
         else {
-            while ((available_sequence = getMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
                 gettimeofday(&end_time, NULL);
                 int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
@@ -352,18 +352,19 @@ public:
 };
 
 
-inline WaitStrategyPtr createWaitStrategy(WaitStrategyOption wait_option,
+inline WaitStrategyPtr CreateWaitStrategy(WaitStrategyOption wait_option,
                                           const TimeConfig& timeConfig)
 {
     switch (wait_option) {
-        case eBlockingStrategy:
+        case kBlockingStrategy:
             return boost::make_shared<BlockingStrategy>();
-        case eSleepingStrategy:
-            return boost::make_shared<SleepingStrategy>(getTimeConfig(timeConfig, eSleep,
-                                                                      boost::posix_time::milliseconds(1)));
-        case eYieldingStrategy:
+        case kSleepingStrategy:
+            return boost::make_shared<SleepingStrategy>(
+                    GetTimeConfig(timeConfig, kSleep,
+                        boost::posix_time::milliseconds(1)));
+        case kYieldingStrategy:
             return boost::make_shared<YieldingStrategy>();
-        case eBusySpinStrategy:
+        case kBusySpinStrategy:
             return boost::make_shared<BusySpinStrategy>();
         default:
             return WaitStrategyPtr();
@@ -371,6 +372,6 @@ inline WaitStrategyPtr createWaitStrategy(WaitStrategyOption wait_option,
 }
 
 
-}
+};  // namespace disruptor
 
 #endif
