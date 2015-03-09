@@ -1,9 +1,5 @@
-#ifndef DISRUPTOR2_SEQUENCER_H_
-#define DISRUPTOR2_SEQUENCER_H_
-
-#include <vector>
-
-#include <boost/utility.hpp>
+#ifndef DISRUPTOR_SEQUENCER_H_
+#define DISRUPTOR_SEQUENCER_H_
 
 #include <disruptor/interface.h>
 #include <disruptor/claim_strategy.h>
@@ -12,23 +8,9 @@
 
 namespace disruptor {
 
-inline size_t ceilToPow2(size_t x)
-{
-    // From http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-    --x;
-    x |= x >> 1;
-    x |= x >> 2;
-    x |= x >> 4;
-    for (size_t i = 1; i < sizeof(size_t); i <<= 1) {
-        x |= x >> (i << 3);
-    }
-    ++x;
-    return x;
-}
-
 // Coordinator for claiming sequences for access to a data structures while
 // tracking dependent {@link Sequence}s
-class Sequencer : public boost::noncopyable
+class Sequencer
 {
 public:
     // Construct a Sequencer with the selected strategies.
@@ -39,10 +21,10 @@ public:
     Sequencer(int buffer_size,
               ClaimStrategyOption claim_strategy_option,
               WaitStrategyOption wait_strategy_option,
-              const TimeConfig& timeConfig = TimeConfig())
+              const TimeConfig& timeConfig=TimeConfig())
         : buffer_size_(ceilToPow2(buffer_size))
-        , claim_strategy_(CreateClaimStrategy(claim_strategy_option, buffer_size_))
-        , wait_strategy_(CreateWaitStrategy(wait_strategy_option, timeConfig))
+        , claim_strategy_(createClaimStrategy(claim_strategy_option, buffer_size_))
+        , wait_strategy_(createWaitStrategy(wait_strategy_option, timeConfig))
     {
     }
 
@@ -66,18 +48,8 @@ public:
     // @return the barrier gated as required.
     SequenceBarrierPtr newBarrier(const DependentSequences& sequences_to_track)
     {
-        return boost::make_shared<ProcessingSequenceBarrier>(
+        return stdext::make_shared<ProcessingSequenceBarrier>(
                 wait_strategy_.get(), &cursor_, sequences_to_track );
-    }
-
-    // Create a new {@link BatchDescriptor} that is the minimum of the
-    // requested size and the buffer_size.
-    //
-    // @param size for the new batch.
-    // @return the new {@link BatchDescriptor}.
-    BatchDescriptorPtr newBatchDescriptor(const int& size)
-    {
-        return boost::make_shared<BatchDescriptor>(size<buffer_size_?size:buffer_size_);
     }
 
     // The capacity of the data structure to hold entries.
@@ -114,7 +86,7 @@ public:
     // @return The number of slots taken.
     int occupiedCapacity() const
     {
-        int64_t consumed = GetMinimumSequence(gating_sequences_);
+        int64_t consumed = getMinimumSequence(gating_sequences_);
         int64_t produced = cursor_.get();
         return static_cast<int>((buffer_size_ + produced - consumed) % buffer_size_);
     }
@@ -126,17 +98,6 @@ public:
     {
         // TODO: check gatingSequence, throw exception if it's empty
         return claim_strategy_->incrementAndGet(gating_sequences_);
-    }
-
-    // Claim the next batch of sequence numbers for publishing.
-    //
-    // @param batch_descriptor to be updated for the batch range.
-    // @return the updated batch_descriptor.
-    BatchDescriptor* next(BatchDescriptor* batch_descriptor)
-    {
-        int64_t sequence = claim_strategy_->incrementAndGet(batch_descriptor->size(), gating_sequences_);
-        batch_descriptor->set_end(sequence);
-        return batch_descriptor;
     }
 
     // Claim a specific sequence when only one publisher is involved.
@@ -154,12 +115,7 @@ public:
     // @param sequence to be published.
     void publish(const int64_t& sequence)
     {
-        this->publish(sequence, 1); } // Publish the batch of events in sequence.
-    //
-    // @param sequence to be published.
-    void publish(const BatchDescriptor& batch_descriptor)
-    {
-        this->publish(batch_descriptor.end(), batch_descriptor.size());
+        this->publish(sequence, 1); // Publish the batch of events in sequence.
     }
 
     // Force the publication of a cursor sequence.
@@ -189,8 +145,12 @@ protected:
 
     ClaimStrategyPtr claim_strategy_;
     WaitStrategyPtr wait_strategy_;
+
+private:
+    Sequencer(const Sequencer& s);
+    Sequencer& operator= (Sequencer s);
 };
 
-};  // namespace disruptor
+}
 
 #endif

@@ -1,14 +1,13 @@
-#ifndef DISRUPTOR2_SEQUENCE_H_
-#define DISRUPTOR2_SEQUENCE_H_
+#ifndef DISRUPTOR_SEQUENCE_H_
+#define DISRUPTOR_SEQUENCE_H_
 
-#include <boost/atomic.hpp>
-#include <boost/utility.hpp>
+#include <disruptor/utils.h>
 
 #ifndef CACHE_LINE_SIZE_IN_BYTES
 #define CACHE_LINE_SIZE_IN_BYTES 64
 #endif
 #define ATOMIC_SEQUENCE_PADDING_LENGTH \
-    (CACHE_LINE_SIZE_IN_BYTES - sizeof(boost::atomic<int64_t>))
+    (CACHE_LINE_SIZE_IN_BYTES - sizeof(stdext::atomic<int64_t>))
 #define SEQUENCE_PADDING_LENGTH \
     (CACHE_LINE_SIZE_IN_BYTES - sizeof(int64_t))
 
@@ -29,7 +28,7 @@ public:
     // Construct a sequence counter that can be tracked across threads.
     //
     // @param initial_value for the counter.
-    explicit Sequence(int64_t initial_value = INITIAL_CURSOR_VALUE)
+    explicit Sequence(int64_t initial_value=INITIAL_CURSOR_VALUE)
         : value_(initial_value)
     {
     }
@@ -42,7 +41,7 @@ public:
     //
     // @return the current value.
     int64_t get(
-            boost::memory_order order=boost::memory_order_acquire) const
+            stdext::memory_order order=stdext::memory_order_acquire) const
     {
         return value_.load(order);
     }
@@ -51,7 +50,7 @@ public:
     //
     // @param the value to which the {@link Sequence} will be set.
     void set(const int64_t& value,
-            boost::memory_order order=boost::memory_order_release)
+            stdext::memory_order order=stdext::memory_order_release)
     {
         value_.store(value, order);
     }
@@ -62,7 +61,7 @@ public:
     // @return the new value incremented.
     int64_t incrementAndGet(
             const int64_t& increment,
-            boost::memory_order order=boost::memory_order_release)
+            stdext::memory_order order=stdext::memory_order_release)
     {
         return value_.fetch_add(increment, order) + increment;
     }
@@ -70,14 +69,14 @@ public:
     bool compareAndExchange(
             int64_t expected,
             int64_t desired,
-            boost::memory_order order=boost::memory_order_release)
+            stdext::memory_order order=stdext::memory_order_release)
     {
         return value_.compare_exchange_strong(expected, desired, order);
     }
 
 private:
     ALIGN(CACHE_LINE_SIZE_IN_BYTES);
-    boost::atomic<int64_t> value_;
+    stdext::atomic<int64_t> value_;
     char padding_[ATOMIC_SEQUENCE_PADDING_LENGTH];
 };
 
@@ -87,7 +86,7 @@ private:
 class MutableLong
 {
 public:
-    explicit MutableLong(int64_t initial_value = INITIAL_CURSOR_VALUE) 
+    explicit MutableLong(int64_t initial_value=INITIAL_CURSOR_VALUE) 
         : sequence_(initial_value) 
     {
     }
@@ -113,7 +112,7 @@ private:
 class PaddedLong : public MutableLong
 {
 public:
-    explicit PaddedLong(int64_t initial_value = INITIAL_CURSOR_VALUE)
+    explicit PaddedLong(int64_t initial_value=INITIAL_CURSOR_VALUE)
         : MutableLong(initial_value)
     {
     }
@@ -126,7 +125,7 @@ private:
 typedef std::vector<Sequence*> DependentSequences;
 
 
-inline int64_t GetMinimumSequence(const DependentSequences& sequences)
+inline int64_t getMinimumSequence(const DependentSequences& sequences)
 {
     int64_t minimum = LONG_MAX;
 
@@ -138,8 +137,8 @@ inline int64_t GetMinimumSequence(const DependentSequences& sequences)
     }
 
     return minimum;
-};
+}
 
-};  // namespace disruptor
+}
 
 #endif

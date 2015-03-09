@@ -1,5 +1,5 @@
-#ifndef DISRUPTOR2_EVENT_PUBLISHER_H_
-#define DISRUPTOR2_EVENT_PUBLISHER_H_
+#ifndef DISRUPTOR_EVENT_PUBLISHER_H_
+#define DISRUPTOR_EVENT_PUBLISHER_H_
 
 #include <disruptor/ring_buffer.h>
 
@@ -44,6 +44,6 @@ private:
     RingBuffer<T>* ring_buffer_;
 };
 
-};  // namespace disruptor
+}
 
 #endif

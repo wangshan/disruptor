@@ -1,40 +1,16 @@
-#ifndef DISRUPTOR2_TYPES_H_
-#define DISRUPTOR2_TYPES_H_
+#ifndef DISRUPTOR_ABSTRACTIONS_H_
+#define DISRUPTOR_ABSTRACTIONS_H_
 
-#include <climits>
-#include <vector>
-#include <map>
-
+#include <disruptor/utils.h>
 #include <disruptor/sequence.h>
-#include <disruptor/batch_descriptor.h>
 
-// According to Stroustrup, in C++11 the macro __cplusplus will be set to a
-// value that differs from (is greater than) the current 199711L.
-#if __cplusplus <= 199711L
-#define STDEXT boost
-#include <boost/utility.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/scoped_array.hpp>
-#include <boost/make_shared.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#else
-#define STDEXT std
-#include <memory>
-#endif
 
 namespace disruptor {
-
-enum TimeConfigKey {
-    kSleep,
-    kMaxIdle
-};
-
-typedef std::map<TimeConfigKey, STDEXT::posix_time::time_duration> TimeConfig;
 
 // Strategies employed for claiming the sequence of events in the
 // {@link Seqencer} by publishers.
 // TODO: add getSequence and getBufferSize
-class IClaimStrategy : public boost::noncopyable
+class IClaimStrategy
 {
 public:
     virtual ~IClaimStrategy() {};
@@ -77,9 +53,12 @@ public:
     virtual void serialisePublishing(const int64_t& sequence,
                                      Sequence& cursor,
                                      const int64_t& batch_size) = 0;
+private:
+    IClaimStrategy(const IClaimStrategy&);
+    IClaimStrategy& operator= (IClaimStrategy);
 };
 
-typedef STDEXT::shared_ptr<IClaimStrategy> ClaimStrategyPtr;
+typedef stdext::shared_ptr<IClaimStrategy> ClaimStrategyPtr;
 
 // Coordination barrier for tracking the cursor for publishers and sequence of
 // dependent {@link EventProcessor}s for processing a data structure.
@@ -106,7 +85,7 @@ public:
     // @throws AlertException if a status change has occurred for the
     // Disruptor.
     virtual int64_t waitFor(const int64_t& sequence,
-                            const STDEXT::posix_time::time_duration& timeout) = 0;
+                            const stdext::chrono::microseconds& timeout) = 0;
 
     // Delegate a call to the {@link Sequencer#getCursor()}
     //
@@ -131,7 +110,7 @@ public:
     virtual void checkAlert() const = 0;
 };
 
-typedef STDEXT::shared_ptr<ISequenceBarrier> SequenceBarrierPtr;
+typedef stdext::shared_ptr<ISequenceBarrier> SequenceBarrierPtr;
 
 // Called by the {@link RingBuffer} to pre-populate all the events to fill the
 // RingBuffer.
@@ -143,7 +122,7 @@ class IEventFactory
 {
 public:
      virtual ~IEventFactory() {};
-     virtual STDEXT::shared_ptr<T> newInstance() const = 0;
+     virtual stdext::shared_ptr<T> newInstance() const = 0;
 };
 
 // Callback interface to be implemented for processing events as they become
@@ -151,7 +130,7 @@ public:
 //
 // @param <T> event implementation storing the data for sharing during exchange
 // or parallel coordination of an event.
-template<typename T>
+template <typename T>
 class IEventHandler
 {
 public:
@@ -183,7 +162,7 @@ public:
 //
 // @param <T> event implementation storing the data for sharing during exchange
 // or parallel coordination of an event.
-template<typename T>
+template <typename T>
 class IEventTranslator
 {
 public:
@@ -203,7 +182,7 @@ public:
 //
 // @param <T> event implementation storing the data for sharing during exchange
 // or parallel coordination of an event.
-template<typename T>
+template <typename T>
 class IEventProcessor
 {
 public:
@@ -227,7 +206,7 @@ public:
 // of the {@link BatchEventProcessor}.
 //
 // @param <T> event type stored in the {@link RingBuffer}.
-template<typename T>
+template <typename T>
 class IExceptionHandler
 {
 public:
@@ -247,7 +226,7 @@ public:
 
 // Strategy employed for making {@link EventProcessor}s wait on a cursor
 // {@link Sequence}.
-class IWaitStrategy : public boost::noncopyable
+class IWaitStrategy
 {
 public:
     virtual ~IWaitStrategy() {};
@@ -285,28 +264,17 @@ public:
                             const Sequence& cursor,
                             const DependentSequences& dependents,
                             const ISequenceBarrier& barrier,
-                            const STDEXT::posix_time::time_duration& timeout) = 0;
+                            const stdext::chrono::microseconds& timeout) = 0;
 
     // Signal those waiting that the cursor has advanced.
     virtual void signalAllWhenBlocking() = 0;
+
+private:
+    IWaitStrategy(const IWaitStrategy&);
+    IWaitStrategy& operator= (IWaitStrategy);
 };
 
-typedef STDEXT::shared_ptr<IWaitStrategy> WaitStrategyPtr;
-
-
-inline STDEXT::posix_time::time_duration getTimeConfig(
-        const TimeConfig& timeConfig,
-        TimeConfigKey key,
-        const STDEXT::posix_time::time_duration& defVal)
-{
-    TimeConfig::const_iterator it = timeConfig.find(key);
-    if (it != timeConfig.end()) {
-        return it->second;
-    }
-    else {
-        return defVal;
-    }
-}
+typedef stdext::shared_ptr<IWaitStrategy> WaitStrategyPtr;
 
 
 }

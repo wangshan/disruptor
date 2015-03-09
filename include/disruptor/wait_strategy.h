@@ -1,12 +1,7 @@
-#ifndef DISRUPTOR2_WAIT_STRATEGY_H_
-#define DISRUPTOR2_WAIT_STRATEGY_H_
+#ifndef DISRUPTOR_WAIT_STRATEGY_H_
+#define DISRUPTOR_WAIT_STRATEGY_H_
 
 #include <sys/time.h>
-
-#include <vector>
-#include <boost/thread.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/thread/thread_time.hpp>
 
 #include <disruptor/exceptions.h>
 #include <disruptor/interface.h>
@@ -50,7 +45,7 @@ public:
         // We need to wait.
         if ((available_sequence = cursor.get()) < sequence) {
             // acquire lock
-            boost::unique_lock<boost::recursive_mutex> ulock(mutex_);
+            stdext::unique_lock<stdext::recursive_mutex> ulock(mutex_);
             while ((available_sequence = cursor.get()) < sequence) {
                 barrier.checkAlert();
                 consumer_notify_condition_.wait(ulock);
@@ -58,7 +53,8 @@ public:
         } // unlock happens here, on ulock destruction.
 
         if (0 != dependents.size()) {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
             }
         }
@@ -70,12 +66,12 @@ public:
                             const Sequence& cursor,
                             const DependentSequences& dependents,
                             const ISequenceBarrier& barrier,
-                            const boost::posix_time::time_duration& timeout)
+                            const stdext::chrono::microseconds& timeout)
     {
         int64_t available_sequence = 0;
         // We have to wait
         if ((available_sequence = cursor.get()) < sequence) {
-            boost::unique_lock<boost::recursive_mutex> ulock(mutex_);
+            stdext::unique_lock<stdext::recursive_mutex> ulock(mutex_);
             while ((available_sequence = cursor.get()) < sequence) {
                 barrier.checkAlert();
                 if (!consumer_notify_condition_.timed_wait(ulock, timeout))
@@ -85,7 +81,8 @@ public:
         } // unlock happens here, on ulock destruction
 
         if (0 != dependents.size()) {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
             }
         }
@@ -95,20 +92,20 @@ public:
 
     virtual void signalAllWhenBlocking()
     {
-        boost::unique_lock<boost::recursive_mutex> ulock(mutex_);
+        stdext::unique_lock<stdext::recursive_mutex> ulock(mutex_);
         consumer_notify_condition_.notify_all();
     }
 
 private:
-    boost::recursive_mutex mutex_;
-    boost::condition_variable_any consumer_notify_condition_;
+    stdext::recursive_mutex mutex_;
+    stdext::condition_variable_any consumer_notify_condition_;
 };
 
 // Sleeping strategy
 class SleepingStrategy : public IWaitStrategy
 {
 public:
-    SleepingStrategy(const boost::posix_time::time_duration& sleep_time)
+    SleepingStrategy(const stdext::chrono::microseconds& sleep_time)
         : sleep_time_(sleep_time)
     {
     }
@@ -127,7 +124,8 @@ public:
             }
         }
         else {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
             }
         }
@@ -139,12 +137,13 @@ public:
                             const Sequence& cursor,
                             const DependentSequences& dependents,
                             const ISequenceBarrier& barrier,
-                            const boost::posix_time::time_duration& timeout)
+                            const stdext::chrono::microseconds& timeout)
     {
         int64_t timeout_micros = timeout.total_microseconds();
         struct timeval start_time, end_time;
         gettimeofday(&start_time, NULL);
-        int64_t start_micro = (int64_t)start_time.tv_sec*1000*1000 + start_time.tv_usec;
+        int64_t start_micro
+            = (int64_t)start_time.tv_sec*1000*1000 + start_time.tv_usec;
 
         int64_t available_sequence = 0;
         int counter = retries;
@@ -153,16 +152,19 @@ public:
             while ((available_sequence = cursor.get()) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
                 gettimeofday(&end_time, NULL);
-                int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
+                int64_t end_micro
+                    = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
                 if (timeout_micros < (end_micro - start_micro))
                     break;
             }
         }
         else {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
                 gettimeofday(&end_time, NULL);
-                int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
+                int64_t end_micro
+                    = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
                 if (timeout_micros < (end_micro - start_micro))
                     break;
             }
@@ -184,18 +186,18 @@ private:
             counter--;
         }
         else {
-            // NOTE: boost::this_thread::sleep uses nanosleep, which has normal
+            // NOTE: stdext::this_thread::sleep uses nanosleep, which has normal
             // resolution and can not sleep on microsecond precision,
             // to sleep more accurately, consider changing to clock_nanosleep,
             // however, I see no difference on redhat 6 with tsc clock source,
             // so I'll keep it like this for now.
-            boost::this_thread::sleep(sleep_time_);
+            stdext::this_thread::sleep(sleep_time_);
         }
 
         return counter;
     }
 
-    boost::posix_time::time_duration sleep_time_;
+    stdext::chrono::microseconds sleep_time_;
 };
 
 // Yielding strategy that uses a sleep(0) for {@link EventProcessor}s waiting
@@ -220,7 +222,8 @@ public:
             }
         }
         else {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
             }
         }
@@ -232,12 +235,13 @@ public:
                             const Sequence& cursor,
                             const DependentSequences& dependents,
                             const ISequenceBarrier& barrier,
-                            const boost::posix_time::time_duration& timeout)
+                            const stdext::chrono::microseconds& timeout)
     {
         int64_t timeout_micros = timeout.total_microseconds();
         struct timeval start_time, end_time;
         gettimeofday(&start_time, NULL);
-        int64_t start_micro = (int64_t)start_time.tv_sec*1000*1000 + start_time.tv_usec;
+        int64_t start_micro
+            = (int64_t)start_time.tv_sec*1000*1000 + start_time.tv_usec;
 
         int64_t available_sequence = 0;
         int counter = retries;
@@ -246,16 +250,19 @@ public:
             while ((available_sequence = cursor.get()) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
                 gettimeofday(&end_time, NULL);
-                int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
+                int64_t end_micro
+                    = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
                 if (timeout_micros < (end_micro - start_micro))
                     break;
             }
         }
         else {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 counter = applyWaitMethod(barrier, counter);
                 gettimeofday(&end_time, NULL);
-                int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
+                int64_t end_micro
+                    = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
                 if (timeout_micros < (end_micro - start_micro))
                     break;
             }
@@ -273,7 +280,7 @@ private:
     {
         barrier.checkAlert();
         if (counter == 0) {
-            boost::this_thread::yield();
+            stdext::this_thread::yield();
         }
         else {
             counter--;
@@ -304,7 +311,8 @@ public:
                 barrier.checkAlert();
             }
         } else {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
             }
         }
@@ -317,28 +325,32 @@ public:
                             const Sequence& cursor,
                             const DependentSequences& dependents,
                             const ISequenceBarrier& barrier,
-                            const boost::posix_time::time_duration& timeout)
+                            const stdext::chrono::microseconds& timeout)
     {
         int64_t timeout_micros = timeout.total_microseconds();
         struct timeval start_time, end_time;
         gettimeofday(&start_time, NULL);
-        int64_t start_micro = (int64_t)start_time.tv_sec*1000*1000 + start_time.tv_usec;
+        int64_t start_micro
+            = (int64_t)start_time.tv_sec*1000*1000 + start_time.tv_usec;
         int64_t available_sequence = 0;
 
         if (0 == dependents.size()) {
             while ((available_sequence = cursor.get()) < sequence) {
                 barrier.checkAlert();
                 gettimeofday(&end_time, NULL);
-                int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
+                int64_t end_micro
+                    = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
                 if (timeout_micros < (end_micro - start_micro))
                     break;
             }
         }
         else {
-            while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
+            while ((available_sequence
+                        = getMinimumSequence(dependents)) < sequence) {
                 barrier.checkAlert();
                 gettimeofday(&end_time, NULL);
-                int64_t end_micro = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
+                int64_t end_micro
+                    = (int64_t)end_time.tv_sec*1000*1000 + end_time.tv_usec;
                 if (timeout_micros < (end_micro - start_micro))
                     break;
             }
@@ -352,26 +364,26 @@ public:
 };
 
 
-inline WaitStrategyPtr CreateWaitStrategy(WaitStrategyOption wait_option,
+inline WaitStrategyPtr createWaitStrategy(WaitStrategyOption wait_option,
                                           const TimeConfig& timeConfig)
 {
     switch (wait_option) {
         case kBlockingStrategy:
-            return boost::make_shared<BlockingStrategy>();
+            return stdext::make_shared<BlockingStrategy>();
         case kSleepingStrategy:
-            return boost::make_shared<SleepingStrategy>(
-                    GetTimeConfig(timeConfig, kSleep,
-                        boost::posix_time::milliseconds(1)));
+            return stdext::make_shared<SleepingStrategy>(
+                    getTimeConfig(timeConfig, kSleep,
+                        stdext::chrono::milliseconds(1)));
         case kYieldingStrategy:
-            return boost::make_shared<YieldingStrategy>();
+            return stdext::make_shared<YieldingStrategy>();
         case kBusySpinStrategy:
-            return boost::make_shared<BusySpinStrategy>();
+            return stdext::make_shared<BusySpinStrategy>();
         default:
             return WaitStrategyPtr();
     }
 }
 
 
-};  // namespace disruptor
+}
 
 #endif
