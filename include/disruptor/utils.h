@@ -20,8 +20,10 @@
 #include <boost/thread.hpp>
 #else
 #define stdext std
+#define has_cplusplus11
 #include <chrono>
 #include <thread>
+#include <functional>
 #endif
 
 

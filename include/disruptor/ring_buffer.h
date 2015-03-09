@@ -77,7 +77,12 @@ private:
 
 private:
     int mask_;
+#ifdef has_cplusplus11
+    std::unique_ptr<T[]> events_;
+#else
     boost::scoped_array<T> events_;
+#endif
+
 };
 
 }
