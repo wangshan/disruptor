@@ -1,7 +1,5 @@
-#ifndef DISRUPTOR2_DYNAMIC_RING_BUFFER_H_
-#define DISRUPTOR2_DYNAMIC_RING_BUFFER_H_
-
-#include <vector>
+#ifndef DISRUPTOR_DYNAMIC_RING_BUFFER_H_
+#define DISRUPTOR_DYNAMIC_RING_BUFFER_H_
 
 #include <disruptor/sequencer.h>
 
@@ -12,12 +10,12 @@ namespace disruptor {
 //
 // @param <T> implementation storing the data for sharing during exchange
 // or parallel coordination of an event.
-template<typename T>
+template <typename T>
 class DynamicRingBuffer
 {
 public:
 
-    struct Block : private boost::noncopyable
+    struct Block : private stdext::noncopyable
     {
         ALIGN(CACHE_LINE_SIZE_IN_BYTES);
         Sequence tail_; // sequence_
@@ -26,11 +24,11 @@ public:
         Sequence head_; // gating_sequence_
 
         ALIGN(CACHE_LINE_SIZE_IN_BYTES);
-        boost::atomic<Block*> next_;
-        char padding_[CACHE_LINE_SIZE_IN_BYTES - sizeof(boost::atomic<Block*>)];
+        stdext::atomic<Block*> next_;
+        char padding_[CACHE_LINE_SIZE_IN_BYTES - sizeof(stdext::atomic<Block*>)];
 
         const size_t size_;
-        boost::scoped_array<T> events_;
+        stdext::scoped_array<T> events_;
 
         Block(size_t size)
             : tail_(INITIAL_CURSOR_VALUE)
@@ -119,9 +117,9 @@ public:
     void enqueue(const T& event)
     {
         // Blocks can be created but never deleted!
-        Block* tail = tail_block_.load(boost::memory_order_relaxed);
-        int64_t block_tail = tail->tail_.get(boost::memory_order_relaxed);
-        boost::atomic_thread_fence(boost::memory_order_acquire);
+        Block* tail = tail_block_.load(stdext::memory_order_relaxed);
+        int64_t block_tail = tail->tail_.get(stdext::memory_order_relaxed);
+        stdext::atomic_thread_fence(stdext::memory_order_acquire);
 
         if (tail->hasAvailableCapacity()) {
             // get sequence from the current block
@@ -130,34 +128,34 @@ public:
         }
         else {
             // current block full, there's another block available(empty)
-            if (tail->next_.load(boost::memory_order_relaxed)
-                    != front_block_.load(boost::memory_order_relaxed)) {
-                boost::atomic_thread_fence(boost::memory_order_acquire); // for the above read
+            if (tail->next_.load(stdext::memory_order_relaxed)
+                    != front_block_.load(stdext::memory_order_relaxed)) {
+                stdext::atomic_thread_fence(stdext::memory_order_acquire); // for the above read
 
-                Block* tail_block_next = tail->next_.load(boost::memory_order_relaxed);
-                int64_t block_head = tail_block_next->head_.get(boost::memory_order_relaxed);
-                block_tail = tail_block_next->tail_.get(boost::memory_order_relaxed);
-                boost::atomic_thread_fence(boost::memory_order_acquire);
+                Block* tail_block_next = tail->next_.load(stdext::memory_order_relaxed);
+                int64_t block_head = tail_block_next->head_.get(stdext::memory_order_relaxed);
+                block_tail = tail_block_next->tail_.get(stdext::memory_order_relaxed);
+                stdext::atomic_thread_fence(stdext::memory_order_acquire);
 
                 assert(block_tail == block_head);
 
                 tail_block_next->set(block_tail + 1, event);
                 tail_block_next->advanceTail();
 
-                boost::atomic_thread_fence(boost::memory_order_release);
+                stdext::atomic_thread_fence(stdext::memory_order_release);
                 tail_block_ = tail_block_next;
             }
             else {
                 // no other block available, create a new one
                 Block* new_block = new Block(buffer_size_);
-                block_tail = new_block->tail_.get(boost::memory_order_relaxed);
+                block_tail = new_block->tail_.get(stdext::memory_order_relaxed);
                 new_block->set(block_tail + 1, event);
                 new_block->advanceTail();
 
-                new_block->next_ = tail->next_.load(boost::memory_order_relaxed);
+                new_block->next_ = tail->next_.load(stdext::memory_order_relaxed);
                 tail->next_ = new_block;
 
-                boost::atomic_thread_fence(boost::memory_order_release);
+                stdext::atomic_thread_fence(stdext::memory_order_release);
                 tail_block_ = new_block;
                 ++num_blocks_;
             }
@@ -170,12 +168,12 @@ public:
         // with head/tail more than once?
         // don't think I can do it for all the available elements, but I should
         // be able to return the available sequence of the current block
-        Block* tail_block_at_start = tail_block_.load(boost::memory_order_relaxed);
-        boost::atomic_thread_fence(boost::memory_order_acquire);
+        Block* tail_block_at_start = tail_block_.load(stdext::memory_order_relaxed);
+        stdext::atomic_thread_fence(stdext::memory_order_acquire);
 
-        Block* head = front_block_.load(boost::memory_order_relaxed);
-        int64_t block_head = head->head_.get(boost::memory_order_relaxed);
-        boost::atomic_thread_fence(boost::memory_order_acquire);
+        Block* head = front_block_.load(stdext::memory_order_relaxed);
+        int64_t block_head = head->head_.get(stdext::memory_order_relaxed);
+        stdext::atomic_thread_fence(stdext::memory_order_acquire);
 
         if (!head->empty()) {
             // dequeue from head block
@@ -186,12 +184,12 @@ public:
             // head block is empty, but there's another block ahead
             Block* next_block = head->next_;
 
-            int64_t block_head = next_block->head_.get(boost::memory_order_relaxed);
-            int64_t block_tail = next_block->tail_.get(boost::memory_order_relaxed);
-            boost::atomic_thread_fence(boost::memory_order_acquire);
+            int64_t block_head = next_block->head_.get(stdext::memory_order_relaxed);
+            int64_t block_tail = next_block->tail_.get(stdext::memory_order_relaxed);
+            stdext::atomic_thread_fence(stdext::memory_order_acquire);
             assert(block_head != block_tail);
 
-            boost::atomic_thread_fence(boost::memory_order_release);
+            stdext::atomic_thread_fence(stdext::memory_order_release);
             head = front_block_ = next_block;
 
             event = head->get(block_head + 1);
@@ -208,12 +206,12 @@ public:
     size_t occupied_approx() const
     {
         size_t result = 0;
-        Block* head_block = front_block_.load(boost::memory_order_relaxed);
+        Block* head_block = front_block_.load(stdext::memory_order_relaxed);
         Block* block = head_block;
         do {
-            size_t head = block->head_.get(boost::memory_order_relaxed);
-            size_t tail = block->tail_.get(boost::memory_order_relaxed);
-            block = block->next_.load(boost::memory_order_relaxed);
+            size_t head = block->head_.get(stdext::memory_order_relaxed);
+            size_t tail = block->tail_.get(stdext::memory_order_relaxed);
+            block = block->next_.load(stdext::memory_order_relaxed);
             result += tail - head;
         } while (block != front_block_);
 
@@ -237,17 +235,17 @@ public:
 
 private:
     ALIGN(CACHE_LINE_SIZE_IN_BYTES);
-    boost::atomic<Block*> front_block_;
-    char padding1_[CACHE_LINE_SIZE_IN_BYTES - sizeof(boost::atomic<Block*>)];
+    stdext::atomic<Block*> front_block_;
+    char padding1_[CACHE_LINE_SIZE_IN_BYTES - sizeof(stdext::atomic<Block*>)];
 
     ALIGN(CACHE_LINE_SIZE_IN_BYTES);
-    boost::atomic<Block*> tail_block_;
-    char padding2_[CACHE_LINE_SIZE_IN_BYTES - sizeof(boost::atomic<Block*>)];
+    stdext::atomic<Block*> tail_block_;
+    char padding2_[CACHE_LINE_SIZE_IN_BYTES - sizeof(stdext::atomic<Block*>)];
 
     const int buffer_size_;
     size_t num_blocks_;
 };
 
-};  // namespace disruptor
+}
 
 #endif

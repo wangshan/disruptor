@@ -1,7 +1,6 @@
-#ifndef DISRUPTOR2_RING_BUFFER_H_
-#define DISRUPTOR2_RING_BUFFER_H_
+#ifndef DISRUPTOR_RING_BUFFER_H_
+#define DISRUPTOR_RING_BUFFER_H_
 
-#include <vector>
 
 #include <disruptor/sequencer.h>
 
@@ -78,9 +77,14 @@ private:
 
 private:
     int mask_;
+#ifdef has_cplusplus11
+    std::unique_ptr<T[]> events_;
+#else
     boost::scoped_array<T> events_;
+#endif
+
 };
 
-};  // namespace disruptor
+}
 
 #endif

@@ -1,13 +1,8 @@
-#ifndef DISRUPTOR2_DISRUPTOR_H
-#define DISRUPTOR2_DISRUPTOR_H
+#ifndef DISRUPTOR_DISRUPTOR_H
+#define DISRUPTOR_DISRUPTOR_H
 
 #include <exception>
 #include <iostream>
-#include <memory>
-
-#include <boost/scoped_ptr.hpp>
-#include <boost/ref.hpp>
-#include <boost/thread.hpp>
 
 #include <disruptor/ring_buffer.h>
 #include <disruptor/event_publisher.h>
@@ -19,7 +14,7 @@ namespace disruptor {
 
 const int DEFAULT_MAX_IDLE_TIME_US = 10;
 
-template<typename T>
+template <typename T>
 class Disruptor
 {
     public:
@@ -33,19 +28,22 @@ class Disruptor
             : ring_buffer_(size, claimStrategy, waitStrategy, timeConfig)
             , barrier_(ring_buffer_.newBarrier(DependentSequences()))
             , processor_(&ring_buffer_, barrier_, handler, exceptHandler,
-                         GetTimeConfig(timeConfig, kMaxIdle,
-                                       boost::posix_time::microseconds(DEFAULT_MAX_IDLE_TIME_US)))
+                         getTimeConfig(timeConfig, kMaxIdle,
+                                       stdext::chrono::microseconds(
+                                           DEFAULT_MAX_IDLE_TIME_US)))
             , publisher_(&ring_buffer_)
-            , consumer_thread_(boost::ref< BatchEventProcessor<T> >(processor_))
+            , consumer_thread_(stdext::ref< BatchEventProcessor<T> >(processor_))
             , stopped_(false)
         {
-            ring_buffer_.setGatingSequences(DependentSequences(1, processor_.getSequence()));
+            ring_buffer_.setGatingSequences(
+                    DependentSequences(1, processor_.getSequence())
+                    );
         }
 
         virtual ~Disruptor()
         {
             if(!stopped_) {
-                stop();
+                this->stop();
             }
         }
 
@@ -86,7 +84,7 @@ class Disruptor
         SequenceBarrierPtr      barrier_;
         BatchEventProcessor<T>  processor_;
         EventPublisher<T>       publisher_;
-        boost::thread           consumer_thread_;
+        stdext::thread           consumer_thread_;
         bool                    stopped_;
 };
 
@@ -96,7 +94,7 @@ class Disruptor
 // - claim strategy is ignored, claim never fails or blocks, unless we run out of memory
 // - T must define a copy constructor and assignment operator, or have trivial ones
 
-template<typename T>
+template <typename T>
 class DynamicDisruptor
 {
     public:
@@ -109,9 +107,10 @@ class DynamicDisruptor
                   const TimeConfig& timeConfig = TimeConfig())
             : ring_buffer_(size, claimStrategy, waitStrategy, timeConfig)
             , processor_(&ring_buffer_, waitStrategy, handler, exceptHandler,
-                         GetTimeConfig(timeConfig, kMaxIdle,
-                                       boost::posix_time::microseconds(DEFAULT_MAX_IDLE_TIME_US)))
-            , consumer_thread_(boost::ref< DynamicProcessor<T> >(processor_))
+                         getTimeConfig(timeConfig, kMaxIdle,
+                                       stdext::chrono::microseconds(
+                                           DEFAULT_MAX_IDLE_TIME_US)))
+            , consumer_thread_(stdext::ref< DynamicProcessor<T> >(processor_))
             , stopped_(false)
         {
         }
@@ -119,7 +118,7 @@ class DynamicDisruptor
         virtual ~DynamicDisruptor()
         {
             if (!stopped_) {
-                stop();
+                this->stop();
             }
         }
 
@@ -153,7 +152,7 @@ class DynamicDisruptor
     private:
         DynamicRingBuffer<T>    ring_buffer_;
         DynamicProcessor<T>     processor_;
-        boost::thread           consumer_thread_;
+        stdext::thread          consumer_thread_;
         bool                    stopped_;
 };
 

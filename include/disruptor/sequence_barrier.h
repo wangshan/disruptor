@@ -1,8 +1,8 @@
-#ifndef DISRUPTOR2_SEQUENCE_BARRIER_H_
-#define DISRUPTOR2_SEQUENCE_BARRIER_H_
+#ifndef DISRUPTOR_SEQUENCE_BARRIER_H_
+#define DISRUPTOR_SEQUENCE_BARRIER_H_
 
 #include <vector>
-#include <boost/atomic.hpp>
+#include <stdext/atomic.hpp>
 
 #include <disruptor/exceptions.h>
 #include <disruptor/interface.h>
@@ -37,7 +37,7 @@ class ProcessingSequenceBarrier : public ISequenceBarrier
         }
 
         virtual int64_t waitFor(const int64_t& sequence,
-                                const boost::posix_time::time_duration& timeout)
+                                const stdext::chrono::microseconds& timeout)
         {
             return wait_strategy_->waitFor(sequence,
                     *cursor_sequence_, dependent_sequences_, *this, timeout);
@@ -50,17 +50,17 @@ class ProcessingSequenceBarrier : public ISequenceBarrier
 
         virtual bool isAlerted() const
         {
-            return alerted_.load(boost::memory_order_acquire);
+            return alerted_.load(stdext::memory_order_acquire);
         }
 
         virtual void alert()
         {
-            alerted_.store(true, boost::memory_order_release);
+            alerted_.store(true, stdext::memory_order_release);
         }
 
         virtual void clearAlert()
         {
-            alerted_.store(false, boost::memory_order_release);
+            alerted_.store(false, stdext::memory_order_release);
         }
 
         virtual void checkAlert() const
@@ -71,12 +71,12 @@ class ProcessingSequenceBarrier : public ISequenceBarrier
         }
 
     private:
-        IWaitStrategy* wait_strategy_;
-        Sequence* cursor_sequence_;
-        DependentSequences dependent_sequences_;
-        boost::atomic<bool> alerted_;
+        IWaitStrategy*       wait_strategy_;
+        Sequence*            cursor_sequence_;
+        DependentSequences   dependent_sequences_;
+        stdext::atomic<bool> alerted_;
 };
 
-};  // namespace disruptor
+}
 
 #endif

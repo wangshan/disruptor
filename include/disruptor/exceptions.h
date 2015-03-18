@@ -1,5 +1,5 @@
-#ifndef DISRUPTOR2_EXCEPTIONS_H_
-#define DISRUPTOR2_EXCEPTIONS_H_
+#ifndef DISRUPTOR_EXCEPTIONS_H_
+#define DISRUPTOR_EXCEPTIONS_H_
 
 #include <exception>
 
@@ -9,6 +9,6 @@ class AlertException : public std::exception
 {
 };
 
-};  // namespace disruptor
+}
 
 #endif

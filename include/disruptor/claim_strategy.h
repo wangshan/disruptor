@@ -1,9 +1,5 @@
-#ifndef DISRUPTOR2_CLAIM_STRATEGY_H_
-#define DISRUPTOR2_CLAIM_STRATEGY_H_
-
-#include <vector>
-#include <boost/thread.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
+#ifndef DISRUPTOR_CLAIM_STRATEGY_H_
+#define DISRUPTOR_CLAIM_STRATEGY_H_
 
 #include <disruptor/interface.h>
 
@@ -27,7 +23,8 @@ public:
         : buffer_size_(buffer_size)
         , sequence_(INITIAL_CURSOR_VALUE)
         , min_gating_sequence_(INITIAL_CURSOR_VALUE)
-    {}
+    {
+    }
 
     virtual int64_t incrementAndGet(
             const DependentSequences& dependent_sequences)
@@ -50,7 +47,7 @@ public:
     {
         int64_t wrap_point = sequence_.get() + 1L - buffer_size_;
         if (wrap_point > min_gating_sequence_.get()) {
-            int64_t min_sequence = GetMinimumSequence(dependent_sequences);
+            int64_t min_sequence = getMinimumSequence(dependent_sequences);
             min_gating_sequence_.set(min_sequence);
             if (wrap_point > min_sequence)
                 return false;
@@ -81,16 +78,17 @@ private:
         int64_t wrap_point = sequence - buffer_size_;
         if (wrap_point > min_gating_sequence_.get()) {
             int64_t min_sequence;
-            while (wrap_point > (min_sequence = GetMinimumSequence(dependent_sequences))) {
-                boost::this_thread::yield();
+            while (wrap_point >
+                    (min_sequence = getMinimumSequence(dependent_sequences))) {
+                stdext::this_thread::yield();
             }
             min_gating_sequence_.set(min_sequence);
         }
     }
 
-    const int buffer_size_;
-    PaddedLong sequence_;
-    PaddedLong min_gating_sequence_;
+    const int   buffer_size_;
+    PaddedLong  sequence_;
+    PaddedLong  min_gating_sequence_;
 };
 
 // Strategy to be used when there are multiple publisher threads claiming
@@ -134,7 +132,7 @@ public:
     {
         const int64_t wrap_point = sequence_.get() + 1L - buffer_size_;
         if (wrap_point > min_gating_sequence_.get()) {
-            int64_t min_sequence = GetMinimumSequence(dependent_sequences);
+            int64_t min_sequence = getMinimumSequence(dependent_sequences);
             min_gating_sequence_.set(min_sequence);
             if (wrap_point > min_sequence)
                 return false;
@@ -162,12 +160,13 @@ protected:
         if (wrap_point > min_gating_sequence_.get()) {
             int counter = retries_;
             int64_t min_sequence;
-            while (wrap_point > (min_sequence = GetMinimumSequence(dependent_sequences))) {
+            while (wrap_point >
+                    (min_sequence = getMinimumSequence(dependent_sequences))) {
                 if (counter > 0) {
                     counter--;
                 }
                 else {
-                    boost::this_thread::sleep(boost::posix_time::milliseconds(1));
+                    stdext::this_thread::sleep(stdext::chrono::milliseconds(1));
                 }
             }
             min_gating_sequence_.set(min_sequence);
@@ -180,16 +179,16 @@ protected:
             --counter;
         }
         else {
-            boost::this_thread::sleep(boost::posix_time::milliseconds(1));
+            stdext::this_thread::sleep(stdext::chrono::milliseconds(1));
         }
 
         return counter;
     }
 
-    const int buffer_size_;
-    Sequence sequence_;
+    const int   buffer_size_;
+    Sequence    sequence_;
     MutableLong min_gating_sequence_; // not atomic, but is safe enough for wrap checking
-    const int retries_;
+    const int   retries_;
 };
 
 
@@ -212,7 +211,7 @@ public:
     MultiThreadedStrategy(const int& buffer_size,
             int pending_buffer_size = DEFAULT_PENDING_BUFFER_SIZE)
         : MultiThreadedLowContentionStrategy(buffer_size)
-        , pending_size_(pending_buffer_size)
+        , pending_size_(ceilToPow2(pending_buffer_size))
         , pending_publication_(new Sequence[pending_buffer_size])
         , pending_mask_(pending_buffer_size - 1)
     {
@@ -250,34 +249,39 @@ public:
         while (cursor.compareAndExchange(expected_sequence, next_sequence)) {
             expected_sequence = next_sequence;
             ++next_sequence;
-            if (pending_publication_[next_sequence & pending_mask_].get() != next_sequence) {
+            if (pending_publication_[next_sequence & pending_mask_].get()
+                    != next_sequence) {
                 break;
             }
         }
     }
 
 private:
-    const int64_t pending_size_; // must be power of 2, TBA checking
-    Sequence* pending_publication_;
-    const int64_t pending_mask_;
+    const int64_t   pending_size_;
+    Sequence*       pending_publication_;
+    const int64_t   pending_mask_;
 };
 
 
-inline ClaimStrategyPtr CreateClaimStrategy(ClaimStrategyOption option,
+inline ClaimStrategyPtr createClaimStrategy(ClaimStrategyOption option,
                                             const int& buffer_size)
 {
     switch (option) {
         case kSingleThreadedStrategy:
-            return boost::make_shared<SingleThreadedStrategy>(buffer_size);
+            return stdext::make_shared<SingleThreadedStrategy>(
+                    buffer_size);
          case kMultiThreadedStrategy:
-            return boost::make_shared<MultiThreadedStrategy>(buffer_size, DEFAULT_PENDING_BUFFER_SIZE);
+            return stdext::make_shared<MultiThreadedStrategy>(
+                    buffer_size,
+                    DEFAULT_PENDING_BUFFER_SIZE);
          case kMultiThreadedLowContentionStrategy:
-            return boost::make_shared<MultiThreadedLowContentionStrategy>(buffer_size);
+            return stdext::make_shared<MultiThreadedLowContentionStrategy>(
+                    buffer_size);
         default:
             return ClaimStrategyPtr();
     }
 };
 
-};  // namespace disruptor
+}
 
 #endif 
